@@ -126,7 +126,7 @@ def trace_prediction(func: Callable) -> Callable:
     return wrapper
 
 
-def log_retrieval(query: str, results: list[dict[str, Any]], k: int) -> None:
+def log_retrieval(query: str, results: list[dict[str, Any]], k: int, category_filter: str = None) -> None:
     """
     Log a retrieval operation to LangSmith.
 
@@ -139,6 +139,7 @@ def log_retrieval(query: str, results: list[dict[str, Any]], k: int) -> None:
         query: The query text used for retrieval
         results: List of retrieved chunk dicts with similarity scores
         k: Number of results requested
+        category_filter: Optional category filter applied
     """
     if not _tracing_enabled or not _langsmith_client:
         return
@@ -147,25 +148,26 @@ def log_retrieval(query: str, results: list[dict[str, Any]], k: int) -> None:
         from langsmith.run_helpers import trace
 
         # Summarize results for logging
-        faction_counts = {}
+        category_counts = {}
         for r in results:
-            faction = r.get("faction", "unknown")
-            faction_counts[faction] = faction_counts.get(faction, 0) + 1
+            category = r.get("category", "unknown")
+            category_counts[category] = category_counts.get(category, 0) + 1
 
         with trace(
-            name="lore_retrieval",
+            name="rag_retrieval",
             run_type="retriever",
-            inputs={"query": query, "k": k},
-            project_name=os.getenv("LANGCHAIN_PROJECT", "warp_analysis_data"),
+            inputs={"query": query, "k": k, "category_filter": category_filter},
+            project_name=os.getenv("LANGCHAIN_PROJECT", "rag_research"),
         ) as run:
             run.end(
                 outputs={
                     "num_results": len(results),
-                    "faction_distribution": faction_counts,
+                    "category_distribution": category_counts,
                     "top_similarity": results[0].get("similarity") if results else None,
                     "results": [
                         {
-                            "faction": r.get("faction"),
+                            "category": r.get("category"),
+                            "source": r.get("source"),
                             "similarity": r.get("similarity"),
                             "text_preview": r.get("text", "")[:100] + "...",
                         }
@@ -177,22 +179,21 @@ def log_retrieval(query: str, results: list[dict[str, Any]], k: int) -> None:
         print(f"[Observability] Warning: Failed to log retrieval: {e}")
 
 
-def log_prediction_result(result: dict[str, Any]) -> None:
+def log_generation(query: str, context: str, answer: str, sources: list[dict], category_filter: str = None) -> None:
     """
-    Log a prediction result to LangSmith as a standalone run.
+    Log a RAG generation operation to LangSmith.
 
     USE THIS FOR:
-        - Batch predictions where decorators don't apply
-        - Manual logging with custom metadata
-        - Evaluation runs
+        - Tracking full RAG pipeline executions
+        - Debugging answer quality issues
+        - Monitoring LLM usage
 
     Args:
-        result: The prediction result dict from RAGClassifier.predict()
-
-    WHAT GETS LOGGED:
-        - inputs: {"text": <input text>}
-        - outputs: {"prediction": <final>, "confidence": <mlp_confidence>, ...}
-        - metadata: {"used_rag": bool, "lore_votes": {...}}
+        query: The user's question
+        context: The formatted context sent to LLM
+        answer: The generated answer
+        sources: List of source chunks used
+        category_filter: Optional category filter applied
     """
     if not _tracing_enabled or not _langsmith_client:
         return
@@ -201,24 +202,28 @@ def log_prediction_result(result: dict[str, Any]) -> None:
         from langsmith.run_helpers import trace
 
         with trace(
-            name="rag_prediction",
-            run_type="chain",
-            inputs={"text": result.get("text", "")},
-            project_name=os.getenv("LANGCHAIN_PROJECT", "warp_analysis_data"),
+            name="rag_generation",
+            run_type="llm",
+            inputs={
+                "query": query,
+                "category_filter": category_filter,
+                "context_length": len(context),
+                "num_sources": len(sources),
+            },
+            project_name=os.getenv("LANGCHAIN_PROJECT", "rag_research"),
         ) as run:
             run.end(
                 outputs={
-                    "final_prediction": result.get("final_prediction"),
-                    "mlp_prediction": result.get("mlp_prediction"),
-                    "mlp_confidence": result.get("mlp_confidence"),
-                    "used_rag": result.get("used_rag"),
-                    "lore_votes": result.get("lore_votes"),
-                    "combined_scores": result.get("combined_scores"),
+                    "answer": answer,
+                    "answer_length": len(answer),
+                    "sources": [
+                        {"category": s.get("category"), "source": s.get("source")}
+                        for s in sources
+                    ],
                 }
             )
     except Exception as e:
-        # Silently fail - observability should never break the main flow
-        print(f"[Observability] Warning: Failed to log prediction: {e}")
+        print(f"[Observability] Warning: Failed to log generation: {e}")
 
 
 def create_evaluation_dataset(

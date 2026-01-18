@@ -29,9 +29,13 @@ from openai import AzureOpenAI
 
 from .chunker import chunk_corpus
 from .vector_store import VectorIndex, train_embedding_model
+from .observability import init_tracing, log_retrieval, log_generation
 
 # Load environment variables
 load_dotenv()
+
+# Initialize LangSmith tracing (optional - fails gracefully if not configured)
+init_tracing()
 
 
 class RAGPipeline:
@@ -121,6 +125,9 @@ class RAGPipeline:
             query=query, k=top_k, category_filter=category_filter
         )
 
+        # Log retrieval to LangSmith (if enabled)
+        log_retrieval(query, retrieved_chunks, top_k, category_filter)
+
         if verbose:
             print(f"\n[RETRIEVAL] Query: {query}")
             if category_filter:
@@ -155,6 +162,9 @@ class RAGPipeline:
         # STEP 4: GENERATE answer using Azure OpenAI
         # =====================================================================
         answer = self._generate_with_llm(prompt)
+
+        # Log generation to LangSmith (if enabled)
+        log_generation(query, context, answer, retrieved_chunks, category_filter)
 
         if verbose:
             print(f"[GENERATION] Answer generated ({len(answer)} chars)")
@@ -296,10 +306,10 @@ def main():
 
     test_queries = [
         ("How do I set up my dev environment?", "tools"),
-        ("What is Universal Billing?", "apps"),
-        ("How does Kingfisher sync data?", "tools"),
+        ("How are background workers structured?", "apps"),
+        ("How do I run the test suite?", "tools"),
         ("What's the PR review process?", "docs"),
-        ("How do I create a ticket via API?", "api"),
+        ("What are the coding style guidelines?", "root"),
     ]
 
     for query, category in test_queries:
