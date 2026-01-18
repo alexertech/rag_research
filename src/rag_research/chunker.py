@@ -1,28 +1,3 @@
-"""
-Chunker Module for RAG Pipeline
-
-================================================================================
-COURSE TOPICS COVERED:
-    - RAG Lecture Session 1: "Chunking Strategies" (Ash Tilawat)
-    - RAG Lecture Session 2: "Precision Delta" — chunk size affects retrieval quality
-    - Key Quote: "Chunking is where RAG lives or dies" — Ash
-================================================================================
-
-PURPOSE:
-    Break large documents into smaller pieces (chunks) for vector embedding.
-    Each chunk becomes a separate searchable unit in the RAG system.
-
-WHY CHUNKING:
-    - Documents are too large to embed as single vectors (dilutes meaning)
-    - Retrieval needs precision: return relevant SECTIONS, not whole docs
-    - Context windows have limits: chunks must fit in LLM prompts
-
-KEY CONCEPTS:
-    - chunk_size: Target size in characters per chunk
-    - overlap: Characters shared between consecutive chunks (prevents lost context at boundaries)
-    - metadata: Information attached to each chunk (source file, faction, position)
-"""
-
 import json
 from pathlib import Path
 
@@ -96,30 +71,8 @@ def chunk_text(text: str, chunk_size: int = 400, overlap: int = 80) -> list[str]
 
 
 def chunk_document(
-    file_path: Path, faction: str, chunk_size: int = 400, overlap: int = 80
+    file_path: Path, category: str, chunk_size: int = 400, overlap: int = 80
 ) -> list[dict]:
-    """
-    Chunk a single document and attach metadata to each chunk.
-
-    COURSE TOPIC: RAG Session 1 — "Metadata-Filtered RAG"
-    - Metadata enables filtering at retrieval time (e.g., faction_filter="chaos")
-    - Key Quote: "Metadata-filtered RAG is usually the right starting point" — Ash
-
-    METADATA PURPOSE:
-        When RAG retrieves a chunk, we need to know:
-        - Where it came from (source file)
-        - What faction it belongs to (for filtering/classification)
-        - Its position (for debugging, potential re-ranking)
-
-    Args:
-        file_path: Path to the markdown file
-        faction: Faction label (e.g., "imperium", "chaos")
-        chunk_size: Target chunk size in characters
-        overlap: Overlap between chunks
-
-    Returns:
-        List of chunk dicts: {"text": str, "source": str, "faction": str, "chunk_index": int}
-    """
     text = file_path.read_text(encoding="utf-8")
 
     # Get raw text chunks
@@ -132,7 +85,7 @@ def chunk_document(
             {
                 "text": chunk,
                 "source": file_path.name,  # Just filename, not full path
-                "faction": faction,
+                "category": category,
                 "chunk_index": i,
             }
         )
@@ -143,23 +96,6 @@ def chunk_document(
 def chunk_corpus(
     corpus_dir: Path, metadata_path: Path, chunk_size: int = 400, overlap: int = 80
 ) -> list[dict]:
-    """
-    Chunk all documents in the corpus using metadata.json for faction info.
-
-    WORKFLOW:
-        1. Read metadata.json to get document list and factions
-        2. For each document: chunk it and attach metadata
-        3. Return flat list of all chunks from all documents
-
-    Args:
-        corpus_dir: Path to lore_corpus directory
-        metadata_path: Path to metadata.json
-        chunk_size: Target chunk size
-        overlap: Overlap between chunks
-
-    Returns:
-        List of all chunks from all documents
-    """
     # Load corpus metadata
     with open(metadata_path, "r") as f:
         metadata = json.load(f)
@@ -168,14 +104,14 @@ def chunk_corpus(
 
     for doc in metadata["documents"]:
         doc_path = corpus_dir / doc["file"]
-        faction = doc["faction"]
+        category = doc["category"]
 
         if not doc_path.exists():
             print(f"Warning: {doc_path} not found, skipping")
             continue
 
         # Chunk this document
-        doc_chunks = chunk_document(doc_path, faction, chunk_size, overlap)
+        doc_chunks = chunk_document(doc_path, category, chunk_size, overlap)
         all_chunks.extend(doc_chunks)
 
         print(f"Chunked {doc['file']}: {len(doc_chunks)} chunks")
@@ -209,5 +145,5 @@ if __name__ == "__main__":
             chunk["text"][:100] + "..." if len(chunk["text"]) > 100 else chunk["text"]
         )
         print(
-            f"  [{chunk['faction']}] {chunk['source']}#{chunk['chunk_index']}: {preview}"
+            f"  [{chunk['category']}] {chunk['source']}#{chunk['chunk_index']}: {preview}"
         )

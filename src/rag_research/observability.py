@@ -1,50 +1,3 @@
-"""
-Observability Module for RAG Pipeline
-================================================================================
-
-COURSE TOPICS COVERED:
-    - Office Hours 2: "LangSmith for Observability" — trace all LLM/retrieval calls
-    - RAG Session 2: "Evals" — create evaluation datasets from production traffic
-    - LangGraph Lecture: "LangSmith" — see graph structure hierarchically
-    - Key Quote: "If you've not been instrumenting what you're doing, you really should" — Aaron
-================================================================================
-
-PURPOSE:
-    Provide tracing and monitoring for the RAG classification system.
-    Integrates with LangSmith to track:
-    - Every prediction request
-    - Retrieval operations (what chunks were found)
-    - Confidence levels and RAG activation
-    - Final predictions with full context
-
-WHY OBSERVABILITY MATTERS:
-    Without tracing, your RAG system is a black box:
-    - "Why did it predict Chaos for this message?"
-    - "What lore chunks influenced the decision?"
-    - "How often is RAG actually being used?"
-
-    With observability, every decision is auditable.
-
-LANGSMITH SETUP:
-    Set these environment variables (see .env.sample):
-    - LANGCHAIN_API_KEY: Your LangSmith API key
-    - LANGCHAIN_TRACING_V2: "true" to enable tracing
-    - LANGCHAIN_PROJECT: Project name in LangSmith dashboard
-
-USAGE:
-    from warpdata_analysis.observability import init_tracing, trace_prediction
-
-    # Initialize at startup
-    init_tracing()
-
-    # Wrap prediction calls
-    @trace_prediction
-    def predict(text):
-        ...
-
-================================================================================
-"""
-
 import os
 from functools import wraps
 from typing import Any, Callable
@@ -274,10 +227,6 @@ def create_evaluation_dataset(
     """
     Create a LangSmith dataset from prediction results for evaluation.
 
-    COURSE TOPIC: Evals Week (upcoming)
-    - This function prepares data for LLM-as-judge evaluation
-    - Aligns with: "Calibrate Evals: Human SME alignment required" — Ash
-
     USE THIS FOR:
         - Building test datasets from production traffic
         - Creating golden datasets for regression testing
@@ -314,7 +263,9 @@ def create_evaluation_dataset(
                 },
             )
 
-        print(f"[Observability] Created dataset '{name}' with {len(predictions)} examples")
+        print(
+            f"[Observability] Created dataset '{name}' with {len(predictions)} examples"
+        )
         return dataset.id
 
     except Exception as e:
